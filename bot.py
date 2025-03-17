@@ -9,7 +9,7 @@ TOKEN = os.environ.get('TOKEN')
 
 # Channel & Role IDs (Update these with actual IDs)
 DUTY_LOG_CHANNEL_ID = 1347456904795787352  # FBI Duty Log Channel
-BOT_LOG_CHANNEL_ID = 1347456904795787352  # Bot Log Channel
+BOT_LOG_CHANNEL_ID = 1347456904795787349  # Bot Log Channel
 FBI_ROLE_ID = 1347456902153502732  # FBI Agent Role ID
 
 # Set up bot with all intents
