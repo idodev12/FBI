@@ -8,12 +8,13 @@ from datetime import datetime, timedelta
 TOKEN = os.environ.get('TOKEN')
 
 # Channel & Role IDs (Update these with actual IDs)
-DUTY_LOG_CHANNEL_ID = 1347456904795787352
-BOT_LOG_CHANNEL_ID = 1347456904795787352  # Update with your bot log channel ID
+DUTY_LOG_CHANNEL_ID = 1347456904795787352  # FBI Duty Log Channel
+BOT_LOG_CHANNEL_ID = 1347456902065553471  # Bot Log Channel
+FBI_ROLE_ID = 1347456902153502732  # FBI Agent Role ID
 
 # Set up bot with all intents
 intents = discord.Intents.all()
-bot = commands.Bot(command_prefix="()e", intents=intents)
+bot = commands.Bot(command_prefix="/", intents=intents)
 
 # Guild ID for syncing commands
 GUILD_ID = 1347456902065553470
@@ -27,8 +28,8 @@ async def on_ready():
     print(f"✅ Logged in as {bot.user}")
 
     try:
-        bot.tree.copy_global_to(guild=discord.Object(id=GUILD_ID))  # Copy global commands to the guild
-        synced = await bot.tree.sync(guild=discord.Object(id=GUILD_ID))  # Sync commands
+        bot.tree.copy_global_to(guild=discord.Object(id=GUILD_ID))  
+        synced = await bot.tree.sync(guild=discord.Object(id=GUILD_ID))  
         print(f"✅ Synced {len(synced)} commands: {[cmd.name for cmd in bot.tree.get_commands(guild=discord.Object(id=GUILD_ID))]}")
     except Exception as e:
         print(f"❌ Error syncing commands: {e}")
@@ -48,17 +49,22 @@ async def send_report(interaction, channel_id, embed):
     await interaction.followup.send("✅ Report logged.", ephemeral=True)
 
 
-# 🟢 Duty Command
-@bot.tree.command(name="duty", description="Toggle duty status.")
+# 🟢 FBI Duty Command (Only for FBI Agents)
+@bot.tree.command(name="duty", description="Toggle FBI duty status.")
 async def duty(interaction: discord.Interaction):
     user = interaction.user
     channel = bot.get_channel(DUTY_LOG_CHANNEL_ID)
+
+    # Check if the user has the FBI role
+    if not any(role.id == FBI_ROLE_ID for role in user.roles):
+        await interaction.response.send_message("🚨 You are not authorized to use this command.", ephemeral=True)
+        return
 
     if user.id in active_duty:
         # Clocking out
         clock_in_time = active_duty.pop(user.id)
         elapsed_time = datetime.now() - clock_in_time
-        elapsed_time_str = str(elapsed_time).split(".")[0]  # Format as HH:MM:SS
+        elapsed_time_str = str(elapsed_time).split(".")[0]  
 
         # Update weekly report
         if user.id in weekly_duty_hours:
@@ -66,12 +72,12 @@ async def duty(interaction: discord.Interaction):
         else:
             weekly_duty_hours[user.id] = elapsed_time.total_seconds()
 
-        embed = discord.Embed(title="🔴 Clocked Out", color=discord.Color.red())
+        embed = discord.Embed(title="🔴 FBI Agent Clocked Out", color=discord.Color.red())
         embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
-        embed.add_field(name="👮 Officer", value=user.mention, inline=True)
+        embed.add_field(name="🕵️ Agent", value=user.mention, inline=True)
         embed.add_field(name="🕒 Clock In Time", value=clock_in_time.strftime("%Y-%m-%d %H:%M:%S"), inline=True)
         embed.add_field(name="⏳ Total Time on Duty", value=elapsed_time_str, inline=True)
-        embed.set_footer(text="Bayview Roleplay Duty System")
+        embed.set_footer(text="FBI Duty Tracking System")
 
         await channel.send(embed=embed)
 
@@ -88,51 +94,54 @@ async def duty(interaction: discord.Interaction):
         active_duty[user.id] = datetime.now()
         clock_in_time = active_duty[user.id]
 
-        embed = discord.Embed(title="🟢 Clocked In", color=discord.Color.green())
+        embed = discord.Embed(title="🟢 FBI Agent Clocked In", color=discord.Color.green())
         embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
-        embed.add_field(name="👮 Officer", value=user.mention, inline=True)
+        embed.add_field(name="🕵️ Agent", value=user.mention, inline=True)
         embed.add_field(name="🕒 Clock In Time", value=clock_in_time.strftime("%Y-%m-%d %H:%M:%S"), inline=True)
-        embed.set_footer(text="Bayview Roleplay Duty System")
+        embed.set_footer(text="FBI Duty Tracking System")
 
         await channel.send(embed=embed)
 
         # DM user
         dm_embed = discord.Embed(title="📌 Duty Status Update", color=discord.Color.green())
         dm_embed.add_field(name="🟩 You are now ON duty!", value="Your duty time has started.", inline=False)
-        dm_embed.add_field(name="📍 Remember", value="Use `/duty` to clock out when you're done.", inline=False)
+        dm_embed.add_field(name="📍 Reminder", value="Use `/duty` to clock out when you're done.", inline=False)
         await user.send(embed=dm_embed)
 
         await interaction.response.send_message("✅ You are now **on duty**.", ephemeral=True)
 
 
-# 🗓️ Weekly Duty Report
+# 🗓️ Weekly FBI Duty Report & Leaderboard
 @tasks.loop(hours=168)  # Runs every 7 days
 async def weekly_report():
     channel = bot.get_channel(DUTY_LOG_CHANNEL_ID)
     if not channel:
-        print("⚠️ Duty log channel not found.")
+        print("⚠️ FBI Duty Log channel not found.")
         return
 
     if not weekly_duty_hours:
         print("ℹ️ No duty hours recorded this week.")
         return
 
-    embed = discord.Embed(title="📆 Weekly Duty Report", color=discord.Color.blue())
-    embed.set_thumbnail(url=bot.user.avatar.url if bot.user.avatar else None)
+    # Generate leaderboard
+    sorted_agents = sorted(weekly_duty_hours.items(), key=lambda x: x[1], reverse=True)
+    
+    leaderboard_embed = discord.Embed(title="🏆 Weekly FBI Duty Leaderboard", color=discord.Color.gold())
+    leaderboard_embed.set_thumbnail(url=bot.user.avatar.url if bot.user.avatar else None)
 
-    for user_id, seconds in weekly_duty_hours.items():
+    for rank, (user_id, seconds) in enumerate(sorted_agents, start=1):
         user = await bot.fetch_user(user_id)
         hours, remainder = divmod(seconds, 3600)
         minutes, _ = divmod(remainder, 60)
-        embed.add_field(name=f"👮 {user.name}", value=f"⏳ {int(hours)}h {int(minutes)}m", inline=False)
+        leaderboard_embed.add_field(name=f"#{rank} 🕵️ {user.name}", value=f"⏳ {int(hours)}h {int(minutes)}m", inline=False)
 
         # DM individual report
         dm_embed = discord.Embed(title="📆 Your Weekly Duty Report", color=discord.Color.blue())
         dm_embed.add_field(name="Total Time on Duty", value=f"⏳ {int(hours)}h {int(minutes)}m", inline=True)
         await user.send(embed=dm_embed)
 
-    embed.set_footer(text="Bayview Roleplay Duty System")
-    await channel.send(embed=embed)
+    leaderboard_embed.set_footer(text="FBI Duty Tracking System")
+    await channel.send(embed=leaderboard_embed)
 
     # Reset weekly hours
     weekly_duty_hours.clear()
